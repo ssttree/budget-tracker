@@ -11,6 +11,7 @@ import { sendEmail } from '@services/email/send-email';
 import { createAppUserWithUniqueUsername, seedUserDefaults } from '@services/user/create-user-with-defaults.service';
 import bcrypt from 'bcryptjs';
 import { betterAuth } from 'better-auth';
+import { APIError } from 'better-auth/api';
 import { jwt } from 'better-auth/plugins';
 import { Pool } from 'pg';
 
@@ -251,6 +252,28 @@ export const auth = betterAuth({
   databaseHooks: {
     user: {
       create: {
+        // Signup allowlist gate. When ALLOWED_SIGNUP_EMAILS is set (comma-
+        // separated), only those emails may create an account; everyone else is
+        // rejected. Empty/unset keeps registration open (unchanged behaviour).
+        // This fires on every new-user creation (email/password AND OAuth) but
+        // never on logins by existing users, so it locks the instance to the
+        // owner without affecting them once their account exists.
+        before: async (user) => {
+          const allowRaw = process.env.ALLOWED_SIGNUP_EMAILS?.trim();
+          if (allowRaw) {
+            const allowed = allowRaw
+              .split(',')
+              .map((entry) => entry.trim().toLowerCase())
+              .filter(Boolean);
+            const email = typeof user.email === 'string' ? user.email.trim().toLowerCase() : '';
+            if (!email || !allowed.includes(email)) {
+              logger.warn(`Blocked signup for non-allowlisted email: ${user.email}`);
+              throw new APIError('FORBIDDEN', {
+                message: 'Registration is restricted on this instance.',
+              });
+            }
+          }
+        },
         // After a new auth user is created, create the matching app user.
         //
         // Better-auth commits ba_user/ba_account BEFORE this hook fires, so
