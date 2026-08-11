@@ -30,6 +30,7 @@ interface BaseCurrencyChangeJobData {
 // `maxRetriesPerRequest: null`.
 const connection = {
   host: process.env.APPLICATION_REDIS_HOST,
+  family: 0, // Railway private net is IPv6-only; 0 = resolve IPv4+IPv6
   maxRetriesPerRequest: null,
   connectTimeout: 20000,
   keepAlive: 10000,

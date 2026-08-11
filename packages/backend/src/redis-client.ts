@@ -12,6 +12,7 @@ export const REDIS_KEY_PREFIX = process.env.JEST_WORKER_ID ? `${process.env.JEST
 
 export const redisClient = new Redis({
   host: process.env.APPLICATION_REDIS_HOST,
+  family: 0, // Railway private net is IPv6-only; 0 = resolve IPv4+IPv6
   keyPrefix: REDIS_KEY_PREFIX,
   lazyConnect: true,
   maxRetriesPerRequest: 3,

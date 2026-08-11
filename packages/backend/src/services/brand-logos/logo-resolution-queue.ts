@@ -15,6 +15,7 @@ interface LogoResolutionJobData {
 // closed" errors in CI. BullMQ requires `maxRetriesPerRequest: null`.
 const connection = {
   host: process.env.APPLICATION_REDIS_HOST,
+  family: 0, // Railway private net is IPv6-only; 0 = resolve IPv4+IPv6
   maxRetriesPerRequest: null,
   connectTimeout: 20000, // 20s connection timeout for slower CI environments
   keepAlive: 10000, // Send TCP keepalive to prevent idle disconnection

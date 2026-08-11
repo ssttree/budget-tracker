@@ -44,6 +44,7 @@ interface TransactionSyncJobData extends SentryTraceData {
 // Uses same resilient settings as main redisClient to prevent "Connection is closed" errors in CI
 const connection = {
   host: process.env.APPLICATION_REDIS_HOST,
+  family: 0, // Railway private net is IPv6-only; 0 = resolve IPv4+IPv6
   maxRetriesPerRequest: null, // Required for BullMQ
   connectTimeout: 20000, // 20s connection timeout for slower CI environments
   keepAlive: 10000, // Send TCP keepalive to prevent idle disconnection
@@ -397,6 +398,7 @@ async function recoverExistingQueues(): Promise<void> {
   // prefix that would mis-scope the pattern).
   const scanClient = new IORedis({
     host: process.env.APPLICATION_REDIS_HOST,
+    family: 0, // Railway private net is IPv6-only; 0 = resolve IPv4+IPv6
     lazyConnect: true,
     maxRetriesPerRequest: 3,
   });
