@@ -27,6 +27,20 @@ const COMPACT_DATE = /^(\d{4})(\d{2})(\d{2})$/;
 // user's confirmed `DateFieldOrder` resolves it.
 const AMBIGUOUS_DMY = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/;
 
+// Same day/month/year family but tolerant of a 2-digit year and an optional
+// wall-clock time before or after the date (`09:03 12-08-26`, `12/08/2026 9:03`).
+// Mirrors the backend's `DMY_FLEX`. Groups: 4 = first field, 5 = second field,
+// 6 = year.
+const DMY_FLEX =
+  /^(?:(\d{1,2}):(\d{2})(?::(\d{2}))?\s+)?(\d{1,2})[/.-](\d{1,2})[/.-](\d{2}|\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/;
+
+// Two-digit years pivot at 70: 70-99 → 1900s, 00-69 → 2000s.
+function expandYear(yearStr: string): number {
+  const raw = Number(yearStr);
+  if (yearStr.length !== 2) return raw;
+  return raw >= 70 ? 1900 + raw : 2000 + raw;
+}
+
 // First separator character of an ambiguous-family value, for option labels.
 const AMBIGUOUS_SEPARATOR = /^\d{1,2}([/.-])/;
 
@@ -97,10 +111,10 @@ export function suggestDateFieldOrder({
   let sawMonthFirstSignal = false;
 
   for (const value of cells) {
-    const match = value.match(AMBIGUOUS_DMY);
+    const match = value.match(DMY_FLEX);
     if (!match) continue;
-    const first = Number(match[1]);
-    const second = Number(match[2]);
+    const first = Number(match[4]);
+    const second = Number(match[5]);
     if (first > 12) sawDayFirstSignal = true;
     if (second > 12) sawMonthFirstSignal = true;
   }
@@ -170,12 +184,12 @@ export function parseDateCellParts({
     return isValidCalendarDate(parts) ? parts : null;
   }
 
-  const ambiguousMatch = value.match(AMBIGUOUS_DMY);
-  if (ambiguousMatch) {
-    const first = Number(ambiguousMatch[1]);
-    const second = Number(ambiguousMatch[2]);
+  const dmyMatch = value.match(DMY_FLEX);
+  if (dmyMatch) {
+    const first = Number(dmyMatch[4]);
+    const second = Number(dmyMatch[5]);
     const parts = {
-      year: Number(ambiguousMatch[3]),
+      year: expandYear(dmyMatch[6]!),
       month: fieldOrder === 'day-first' ? second : first,
       day: fieldOrder === 'day-first' ? first : second,
     };

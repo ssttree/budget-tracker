@@ -65,10 +65,22 @@ const ISO_DATE = /^(\d{4})[/.-](\d{1,2})[/.-](\d{1,2})$/;
 // Compact 8-digit YYYYMMDD with no separators.
 const COMPACT_DATE = /^(\d{4})(\d{2})(\d{2})$/;
 
-// Year-LAST date with two 1-2 digit lead fields (d/d/yyyy, `/ . -` separators).
-// Which lead field is the day vs the month is intrinsically ambiguous, so it is
-// resolved at the column level via `DateColumnFormat.fieldOrder`.
-const AMBIGUOUS_DMY = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/;
+// Year-LAST date with two 1-2 digit lead fields and a 2- OR 4-digit year
+// (`d/d/yy` or `d/d/yyyy`, `/ . -` separators), optionally wrapped by a
+// wall-clock time before or after (`HH:MM`, optional `:SS`). Covers bank
+// exports like `09:03 12-08-26` and `12/08/2026 9:03`. Which lead field is the
+// day vs the month is intrinsically ambiguous, so it is resolved at the column
+// level via `DateColumnFormat.fieldOrder`.
+const DMY_FLEX =
+  /^(?:(\d{1,2}):(\d{2})(?::(\d{2}))?\s+)?(\d{1,2})[/.-](\d{1,2})[/.-](\d{2}|\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/;
+
+// Two-digit years pivot at 70: 70-99 → 1900s, 00-69 → 2000s. Four-digit years
+// pass through unchanged.
+function expandYear(yearStr: string): number {
+  const raw = Number(yearStr);
+  if (yearStr.length !== 2) return raw;
+  return raw >= 70 ? 1900 + raw : 2000 + raw;
+}
 
 function isValidCalendarDate({ year, month, day }: { year: number; month: number; day: number }): boolean {
   if (month < 1 || month > 12) return false;
@@ -121,17 +133,32 @@ export function parseImportDate({ value, format }: ParseImportDateParams): Parse
     }
   }
 
-  const ambiguousMatch = value.match(AMBIGUOUS_DMY);
-  if (ambiguousMatch) {
-    const [, firstStr, secondStr, yearStr] = ambiguousMatch;
+  const dmyMatch = value.match(DMY_FLEX);
+  if (dmyMatch) {
+    const [, leadH, leadM, leadS, firstStr, secondStr, yearStr, trailH, trailM, trailS] = dmyMatch;
     const first = Number(firstStr);
     const second = Number(secondStr);
-    const year = Number(yearStr);
+    const year = expandYear(yearStr!);
     // The whole column shares one order, so a leading field is the day or the
     // month consistently — never re-guessed per value.
     const day = format.fieldOrder === 'day-first' ? first : second;
     const month = format.fieldOrder === 'day-first' ? second : first;
     if (isValidCalendarDate({ year, month, day })) {
+      // A wall-clock time may sit before or after the date. When present the
+      // cell is a localDateTime (anchored later to the user's timezone);
+      // otherwise it is a plain calendar day.
+      const hourStr = leadH ?? trailH;
+      const minuteStr = leadM ?? trailM;
+      const secStr = leadS ?? trailS;
+      if (hourStr !== undefined && minuteStr !== undefined) {
+        const hour = Number(hourStr);
+        const minute = Number(minuteStr);
+        const sec = secStr ? Number(secStr) : 0;
+        if (hour <= 23 && minute <= 59 && sec <= 59) {
+          return { kind: 'localDateTime', year, month, day, hour, minute, second: sec, ms: 0 };
+        }
+        return null;
+      }
       return { kind: 'dateOnly', year, month, day };
     }
   }
@@ -155,10 +182,10 @@ export function detectDateColumnFormat({ values, locale }: DetectDateColumnForma
   // be a month-position day (→ month-first). All other shapes are intrinsically
   // ordered and contribute no signal.
   for (const value of values) {
-    const match = value.match(AMBIGUOUS_DMY);
+    const match = value.match(DMY_FLEX);
     if (!match) continue;
-    const first = Number(match[1]);
-    const second = Number(match[2]);
+    const first = Number(match[4]);
+    const second = Number(match[5]);
     if (first > 12) sawDayFirstSignal = true;
     if (second > 12) sawMonthFirstSignal = true;
   }
