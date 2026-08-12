@@ -17,6 +17,12 @@ import { isAccountDecided, isCategoryDecided, isCurrencyDecided } from './field-
 export function toColumnMappingConfig({ mapping }: { mapping: ColumnMapping }): ColumnMappingConfig | null {
   const { date, dateFieldOrder, amount, category, account, currency, transactionType } = mapping;
 
+  // Split debit/credit amount mode: when either column is mapped, the amount is
+  // derived from them and the single `amount` column becomes optional.
+  const debitColumn = mapping.debitColumn || undefined;
+  const creditColumn = mapping.creditColumn || undefined;
+  const usesSplitAmount = Boolean(debitColumn || creditColumn);
+
   // The truthiness checks narrow the nullable working fields. The `*Decided`
   // predicates additionally require the chosen method's id: a present object can
   // still carry an empty id (e.g. "assign to one existing account" before one is
@@ -24,7 +30,7 @@ export function toColumnMappingConfig({ mapping }: { mapping: ColumnMapping }): 
   if (
     !date ||
     !dateFieldOrder ||
-    !amount ||
+    (!amount && !usesSplitAmount) ||
     !category ||
     !account ||
     !currency ||
@@ -38,7 +44,9 @@ export function toColumnMappingConfig({ mapping }: { mapping: ColumnMapping }): 
   return {
     date,
     dateFieldOrder,
-    amount,
+    amount: amount ?? '',
+    debitColumn,
+    creditColumn,
     description: mapping.description || undefined,
     payee: mapping.payee || undefined,
     category,

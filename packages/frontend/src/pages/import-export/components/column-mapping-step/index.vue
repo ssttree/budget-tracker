@@ -350,6 +350,8 @@ const columnByField = computed<Record<string, string | null>>(() => {
   return {
     date: mapping.date,
     amount: mapping.amount,
+    debitColumn: mapping.debitColumn ?? null,
+    creditColumn: mapping.creditColumn ?? null,
     description: mapping.description,
     payee: mapping.payee,
     category: categoryCol,
@@ -398,7 +400,7 @@ const simpleColumns: MappingTableColumn[] = [
 ];
 
 interface SimpleRow {
-  id: 'date' | 'amount' | 'description' | 'payee';
+  id: 'date' | 'amount' | 'description' | 'payee' | 'debitColumn' | 'creditColumn';
   label: string;
   required: boolean;
   value: string | null;
@@ -431,15 +433,44 @@ const simpleRows = computed<SimpleRow[]>(() => [
   {
     id: 'amount',
     label: t('pages.importExport.mapColumns.fields.amount'),
-    required: true,
+    // Amount becomes optional once the user opts into split debit/credit columns.
+    required: !(m.value.debitColumn || m.value.creditColumn),
     value: m.value.amount,
     status: deriveMapRowStatus({
       hasValue: !!m.value.amount,
-      required: true,
+      required: !(m.value.debitColumn || m.value.creditColumn),
       match: importStore.columnMatch?.amount ?? null,
     }),
     onChange: (value) => {
       importStore.columnMapping.amount = value;
+    },
+  },
+  {
+    id: 'debitColumn',
+    label: t('pages.importExport.mapColumns.fields.debit'),
+    required: false,
+    value: m.value.debitColumn ?? null,
+    status: deriveMapRowStatus({
+      hasValue: !!m.value.debitColumn,
+      required: false,
+      match: null,
+    }),
+    onChange: (value) => {
+      importStore.columnMapping.debitColumn = value;
+    },
+  },
+  {
+    id: 'creditColumn',
+    label: t('pages.importExport.mapColumns.fields.credit'),
+    required: false,
+    value: m.value.creditColumn ?? null,
+    status: deriveMapRowStatus({
+      hasValue: !!m.value.creditColumn,
+      required: false,
+      match: null,
+    }),
+    onChange: (value) => {
+      importStore.columnMapping.creditColumn = value;
     },
   },
   {

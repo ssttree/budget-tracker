@@ -48,6 +48,13 @@ export interface ColumnMapping {
   dateFieldOrder: DateFieldOrder | null;
   /** Matched amount column header, or `null` when no column matched. */
   amount: string | null;
+  /**
+   * Optional split-amount mode: separate debit/credit columns. When either is
+   * set the wizard treats amount as coming from these two columns (credit
+   * positive, debit negative) instead of the single `amount` column.
+   */
+  debitColumn?: string | null;
+  creditColumn?: string | null;
   /** Matched description column header, or `null` when none matched (optional field). */
   description: string | null;
   /** Matched payee column header, or `null` when none matched (optional field). */
@@ -127,6 +134,9 @@ export function buildInitialColumnMapping({
     // in the Map step's date-format expansion, never here.
     dateFieldOrder: null,
     amount: matchResult.amount?.column ?? null,
+    // Split debit/credit columns are opt-in via the Map step; never auto-filled.
+    debitColumn: null,
+    creditColumn: null,
     description: matchResult.description?.column ?? null,
     payee: matchResult.payee?.column ?? null,
     category,

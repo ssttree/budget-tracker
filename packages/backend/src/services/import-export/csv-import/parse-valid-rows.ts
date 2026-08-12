@@ -74,6 +74,11 @@ export async function parseValidRows({
   // Get column indices
   const dateIndex = headers.indexOf(columnMapping.date);
   const amountIndex = headers.indexOf(columnMapping.amount);
+  // Split debit/credit amount mode: when either column is mapped, the signed
+  // amount is derived from the two columns instead of the single `amount` one.
+  const debitIndex = columnMapping.debitColumn ? headers.indexOf(columnMapping.debitColumn) : -1;
+  const creditIndex = columnMapping.creditColumn ? headers.indexOf(columnMapping.creditColumn) : -1;
+  const useSplitAmount = Boolean(columnMapping.debitColumn || columnMapping.creditColumn);
   const descriptionIndex = columnMapping.description ? headers.indexOf(columnMapping.description) : -1;
   const payeeIndex = columnMapping.payee ? headers.indexOf(columnMapping.payee) : -1;
   // A typo'd / case-mismatched `payee` mapping previously fell through as -1
@@ -120,11 +125,33 @@ export async function parseValidRows({
       errors.push(t({ key: 'csvImport.invalidDateFormat', variables: { dateStr } }));
     }
 
-    // Parse amount
-    const amountStr = row[amountIndex]?.trim() || '';
-    const parsedAmount = parseAmount(amountStr);
-    if (parsedAmount === null) {
-      errors.push(t({ key: 'csvImport.invalidAmount', variables: { amountStr } }));
+    // Parse amount. Two modes: a single signed `amount` column, or separate
+    // debit/credit columns that combine into one signed amount — credit adds,
+    // debit subtracts, so the sign (and thus income/expense) is intrinsic.
+    let parsedAmount: number | null;
+    let splitTransactionType: 'income' | 'expense' | null = null;
+    if (useSplitAmount) {
+      const creditStr = creditIndex !== -1 ? row[creditIndex]?.trim() || '' : '';
+      const debitStr = debitIndex !== -1 ? row[debitIndex]?.trim() || '' : '';
+      const creditVal = creditStr ? parseAmount(creditStr) : 0;
+      const debitVal = debitStr ? parseAmount(debitStr) : 0;
+      if ((creditStr && creditVal === null) || (debitStr && debitVal === null)) {
+        parsedAmount = null;
+        errors.push(t({ key: 'csvImport.invalidAmount', variables: { amountStr: creditStr || debitStr } }));
+      } else if (!creditStr && !debitStr) {
+        // A row with neither a debit nor a credit value carries no amount.
+        parsedAmount = null;
+        errors.push(t({ key: 'csvImport.invalidAmount', variables: { amountStr: '' } }));
+      } else {
+        parsedAmount = Math.abs(creditVal ?? 0) - Math.abs(debitVal ?? 0);
+        splitTransactionType = parsedAmount >= 0 ? 'income' : 'expense';
+      }
+    } else {
+      const amountStr = row[amountIndex]?.trim() || '';
+      parsedAmount = parseAmount(amountStr);
+      if (parsedAmount === null) {
+        errors.push(t({ key: 'csvImport.invalidAmount', variables: { amountStr } }));
+      }
     }
 
     // Get description
@@ -163,7 +190,11 @@ export async function parseValidRows({
 
     // Determine transaction type
     let transactionType: 'income' | 'expense' = 'expense';
-    if (columnMapping.transactionType.option === TransactionTypeOptionValue.amountSign) {
+    if (useSplitAmount) {
+      // In split debit/credit mode the sign is intrinsic to which column held
+      // the value, so the transaction-type mapping is bypassed entirely.
+      transactionType = splitTransactionType ?? 'expense';
+    } else if (columnMapping.transactionType.option === TransactionTypeOptionValue.amountSign) {
       transactionType = parsedAmount !== null && parsedAmount >= 0 ? 'income' : 'expense';
     } else if (transactionTypeIndex !== -1) {
       const typeValue = row[transactionTypeIndex]?.trim() || '';

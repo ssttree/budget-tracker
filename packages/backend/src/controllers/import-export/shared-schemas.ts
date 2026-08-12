@@ -52,6 +52,8 @@ export const columnMappingConfigSchema = z.object({
   // date column, so every payload carries an explicit choice.
   dateFieldOrder: z.enum(['day-first', 'month-first']),
   amount: z.string(),
+  debitColumn: z.string().optional(),
+  creditColumn: z.string().optional(),
   description: z.string().optional(),
   payee: z.string().optional(),
   category: categoryOptionSchema,

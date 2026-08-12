@@ -79,6 +79,8 @@ const emptyColumnMapping = (): ColumnMapping => ({
   date: null,
   dateFieldOrder: null,
   amount: null,
+  debitColumn: null,
+  creditColumn: null,
   description: null,
   payee: null,
   category: null,
@@ -359,7 +361,10 @@ export const useImportExportStore = defineStore('importExport', () => {
   const isMapStepValid = computed(() => {
     const m = columnMapping.value;
 
-    if (!m.date || !m.amount) return false;
+    if (!m.date) return false;
+    // Amount can be supplied either as a single signed column or as a pair of
+    // debit/credit columns — either one satisfies the requirement.
+    if (!m.amount && !m.debitColumn && !m.creditColumn) return false;
     // The day/month order is a forced, explicit user choice (auto-detection
     // only pre-suggests), so an unconfirmed order blocks Next.
     if (!m.dateFieldOrder) return false;

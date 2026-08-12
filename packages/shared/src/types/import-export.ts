@@ -133,6 +133,11 @@ export interface ColumnMappingConfig {
   /** User-confirmed day/month order applied to the whole `date` column. */
   dateFieldOrder: DateFieldOrder;
   amount: string;
+  /** Optional split-amount mode. When either column is set, the signed amount is
+   *  derived from separate debit and credit columns (credit positive, debit
+   *  negative) and the single `amount` column is ignored. */
+  debitColumn?: string;
+  creditColumn?: string;
   description?: string;
   /** Optional CSV column whose value becomes `rawMerchantName` on the imported
    *  transaction — drives Payee extraction + `payee_rule` auto-categorization. */

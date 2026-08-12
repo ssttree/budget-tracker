@@ -371,7 +371,9 @@
           "account": "Account",
           "currency": "Currency",
           "transactionType": "Transaction type",
-          "payee": "Payee"
+          "payee": "Payee",
+          "debit": "Debit column (money out)",
+          "credit": "Credit column (money in)"
         },
         "dateFormat": {
           "label": "Date format",
