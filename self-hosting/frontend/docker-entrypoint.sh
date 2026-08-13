@@ -93,6 +93,31 @@ envsubst '$CSP_EXTRA_CONNECT $CSP_EXTRA_FORM_ACTION $CSP_EXTRA_ANALYTICS' \
   < /etc/nginx/templates/nginx.conf.template \
   > /etc/nginx/nginx.conf
 
+# --- Dynamic backend resolution ---------------------------------------------
+
+# Platforms like Railway assign the backend a new private IP on every deploy.
+# nginx resolves a `proxy_pass` hostname ONCE at startup, so a static target
+# would keep hitting the previous (now dead) IP after a backend redeploy — the
+# whole API 502s / times out until the frontend is manually restarted. To make
+# nginx re-resolve at runtime we emit a `resolver` (the container's own DNS
+# server, read from /etc/resolv.conf) plus a `$bt_backend` variable, and every
+# proxy_pass below targets that variable. Sorted first (`00-`) so the resolver
+# and variable exist before the location includes that use them. Only emitted
+# in same-origin mode (BACKEND_URL set); cross-origin builds skip it.
+RESOLVER_INCLUDE="/etc/nginx/includes/00-proxy-backend.conf"
+if [ -n "${BACKEND_URL-}" ]; then
+  RESOLVER="$(awk '/^nameserver/ { print $2; exit }' /etc/resolv.conf 2>/dev/null || true)"
+  [ -n "$RESOLVER" ] || RESOLVER="127.0.0.11"
+  # Bracket IPv6 literals for the nginx `resolver` directive.
+  case "$RESOLVER" in *:*) RESOLVER="[$RESOLVER]" ;; esac
+  cat > "$RESOLVER_INCLUDE" <<EOF
+resolver ${RESOLVER} valid=10s;
+set \$bt_backend "${BACKEND_URL}";
+EOF
+else
+  : > "$RESOLVER_INCLUDE"
+fi
+
 # --- Conditional /api reverse proxy -----------------------------------------
 
 # Only emit the proxy block when BACKEND_URL is set (same-origin deployments).
@@ -102,7 +127,7 @@ API_PROXY_INCLUDE="/etc/nginx/includes/api-proxy.conf"
 if [ -n "${BACKEND_URL-}" ]; then
   cat > "$API_PROXY_INCLUDE" <<EOF
 location /api/ {
-  proxy_pass ${BACKEND_URL};
+  proxy_pass \$bt_backend;
   proxy_http_version 1.1;
   proxy_set_header Host \$host;
   proxy_set_header X-Real-IP \$remote_addr;
@@ -136,7 +161,7 @@ OAUTH_MCP_INCLUDE="/etc/nginx/includes/oauth-mcp.conf"
 if [ -n "${BACKEND_URL-}" ]; then
   cat > "$OAUTH_MCP_INCLUDE" <<EOF
 location = /mcp {
-  proxy_pass ${BACKEND_URL};
+  proxy_pass \$bt_backend;
   proxy_http_version 1.1;
   proxy_set_header Host \$host;
   proxy_set_header X-Real-IP \$remote_addr;
@@ -158,41 +183,41 @@ location = /mcp/ {
 # /authorize, /token and /register on the origin root. The backend answers
 # those with 307s to their real /api/v1/auth/oauth2/* paths.
 location = /authorize {
-  proxy_pass ${BACKEND_URL};
+  proxy_pass \$bt_backend;
   proxy_set_header Host \$host;
   proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
   proxy_set_header X-Forwarded-Proto \$scheme;
 }
 location = /token {
-  proxy_pass ${BACKEND_URL};
+  proxy_pass \$bt_backend;
   proxy_set_header Host \$host;
   proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
   proxy_set_header X-Forwarded-Proto \$scheme;
 }
 location = /register {
-  proxy_pass ${BACKEND_URL};
+  proxy_pass \$bt_backend;
   proxy_set_header Host \$host;
   proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
   proxy_set_header X-Forwarded-Proto \$scheme;
 }
 
 location = /.well-known/oauth-authorization-server {
-  proxy_pass ${BACKEND_URL};
+  proxy_pass \$bt_backend;
   proxy_set_header Host \$host;
   proxy_set_header X-Forwarded-Proto \$scheme;
 }
 location = /.well-known/oauth-authorization-server/mcp {
-  proxy_pass ${BACKEND_URL};
+  proxy_pass \$bt_backend;
   proxy_set_header Host \$host;
   proxy_set_header X-Forwarded-Proto \$scheme;
 }
 location = /.well-known/oauth-protected-resource {
-  proxy_pass ${BACKEND_URL};
+  proxy_pass \$bt_backend;
   proxy_set_header Host \$host;
   proxy_set_header X-Forwarded-Proto \$scheme;
 }
 location = /.well-known/oauth-protected-resource/mcp {
-  proxy_pass ${BACKEND_URL};
+  proxy_pass \$bt_backend;
   proxy_set_header Host \$host;
   proxy_set_header X-Forwarded-Proto \$scheme;
 }
