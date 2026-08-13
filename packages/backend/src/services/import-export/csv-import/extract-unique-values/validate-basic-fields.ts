@@ -15,7 +15,19 @@ export function validateBasicFields({
     });
   }
 
-  if (!headers.includes(columnMapping.amount)) {
+  // Amount comes either from a single signed column or from a debit/credit column
+  // pair. Validate whichever mode the mapping actually uses — in split mode the
+  // `amount` field is intentionally blank and must not be checked.
+  const usesSplitAmount = Boolean(columnMapping.debitColumn || columnMapping.creditColumn);
+  if (usesSplitAmount) {
+    for (const column of [columnMapping.debitColumn, columnMapping.creditColumn]) {
+      if (column && !headers.includes(column)) {
+        throw new ValidationError({
+          message: t({ key: 'csvImport.amountColumnNotFound', variables: { columnName: column } }),
+        });
+      }
+    }
+  } else if (!headers.includes(columnMapping.amount)) {
     throw new ValidationError({
       message: t({ key: 'csvImport.amountColumnNotFound', variables: { columnName: columnMapping.amount } }),
     });
