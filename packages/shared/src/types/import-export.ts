@@ -441,6 +441,9 @@ export interface CsvImportSummary extends ImportSummaryBase {
   newTransactionIds: string[];
   /** Batch id stamped on every imported transaction's import details. */
   batchId: string;
+  /** Internal transfers auto-detected and linked across accounts after this
+   *  import (opposite-direction, same-amount legs in different accounts). */
+  transfersLinked?: number;
 }
 
 /** Common counters every CSV import progress event carries. */

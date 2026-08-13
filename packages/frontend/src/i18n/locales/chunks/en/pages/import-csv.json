@@ -118,6 +118,7 @@
           "categoriesCreated": "Categories Created",
           "tagsCreated": "Tags Created",
           "payeesCreated": "Payees Created",
+          "transfersLinked": "Transfers Auto-Linked",
           "importErrors": "Import Errors",
           "rowNumber": "Row #",
           "error": "Error",

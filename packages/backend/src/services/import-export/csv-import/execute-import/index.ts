@@ -20,6 +20,7 @@ import { logger } from '@js/utils/logger';
 import { trackImportCompleted } from '@js/utils/posthog';
 import * as Accounts from '@models/accounts.model';
 import { addUserCurrencies } from '@services/currencies/add-user-currency';
+import { autoDetectAndLinkTransfers } from '@services/import-export/core/auto-detect-transfers';
 import { partitionReconcileAccounts } from '@services/import-export/core/partition-reconcile-accounts';
 import { startBalanceReconciliation } from '@services/import-export/core/reconcile-account-balances';
 import { createAccountsIfNeeded } from '@services/import-export/core/resolve/create-accounts-if-needed';
@@ -396,6 +397,25 @@ async function executeImportImpl({
   });
   errors.push(...balanceErrors);
 
+  // Auto-link internal transfers across the user's accounts. Money moved between
+  // their own accounts imports as an expense in one and an income in the other;
+  // this pairs and links those legs so they stop double-counting as spending +
+  // income. Scoped to the imported rows' date window (padded) so a leg imported
+  // in an earlier run for another account is still caught. Best-effort: a
+  // failure here never fails the import (the rows are already committed).
+  let transfersLinked = 0;
+  try {
+    const times = rowsToImport.map((r) => new Date(r.date).getTime());
+    const { linkedCount } = await autoDetectAndLinkTransfers({
+      userId,
+      fromDate: new Date(Math.min(...times)),
+      toDate: new Date(Math.max(...times)),
+    });
+    transfersLinked = linkedCount;
+  } catch (err) {
+    logger.error({ message: '[CSV import] Auto transfer detection failed', error: err as Error });
+  }
+
   // Track analytics event
   if (newTransactionIds.length > 0) {
     trackImportCompleted({
@@ -417,6 +437,7 @@ async function executeImportImpl({
     newTransactionIds,
     batchId,
     accountBalanceChanges,
+    transfersLinked,
   };
 }
 

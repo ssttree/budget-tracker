@@ -98,6 +98,12 @@
           :value="summary.tagsCreated"
           variant="neutral"
         />
+        <StatCard
+          v-if="(summary.transfersLinked ?? 0) > 0"
+          :label="$t('pages.importExport.csvImport.results.transfersLinked')"
+          :value="summary.transfersLinked ?? 0"
+          variant="neutral"
+        />
       </div>
     </div>
 
@@ -203,7 +209,8 @@ const hasSecondaryStats = computed(() => {
     s.accountsCreated > 0 ||
     s.categoriesCreated > 0 ||
     s.payeesCreated > 0 ||
-    s.tagsCreated > 0
+    s.tagsCreated > 0 ||
+    (s.transfersLinked ?? 0) > 0
   );
 });
 
